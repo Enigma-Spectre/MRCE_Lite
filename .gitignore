@@ -1,0 +1,35 @@
+@'
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.build/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+.coverage
+*.log
+
+# Envs
+.venv/
+venv/
+env/
+ENV/
+*.env
+.env
+
+# Editors/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Project-specific
+dspy_mrce_pkg.zip
+*hint*.json
+mrce_hints.json
+'@ | Set-Content -Encoding UTF8 .gitignore
