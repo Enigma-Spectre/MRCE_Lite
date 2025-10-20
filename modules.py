@@ -168,6 +168,38 @@ def _jaccard(a: Set[str], b: Set[str]) -> float:
         return 0.0
     return len(a & b) / max(len(a | b), 1)
 
+class Judge(dspy.Module):
+    def __init__(self, temperature: float = 0.3):
+        super().__init__()
+        self.step = dspy.ChainOfThought(JudgeSig, temperature=temperature)
+
+    def forward(
+        self,
+        question: str,
+        candidates: List[str],
+        labels: Optional[List[str]] = None,
+        want_payload: bool = False,
+    ):
+        blocks = []
+        for i, text in enumerate(candidates, 1):
+            label = labels[i - 1] if labels and i - 1 < len(labels) else f"Candidate {i}"
+            blocks.append(f"[{label}]\n{text}")
+        joined = "\n\n".join(blocks)
+        out = self.step(system=SYSTEM_PERSONA, question=question, candidates=joined)
+        ranking_line = str(getattr(out, "rankings", "")).strip()
+        ranking = [lab.strip() for lab in ranking_line.split(">") if lab.strip()]
+        best_label = str(getattr(out, "best", "")).strip()
+        if not best_label and ranking:
+            best_label = ranking[0]
+        pred = dspy.Prediction(
+            best_label=best_label,
+            rankings=ranking,
+            rationale=str(getattr(out, "rationale", "")),
+        )
+        if want_payload:
+            pred.payload = joined
+        return pred
+
 class Summarizer(dspy.Module):
     def __init__(self):
         super().__init__()

@@ -13,6 +13,7 @@ dspy_mrce_pkg/
   signatures.py     # DSPy signatures + type aliases (RoundMode, VibeLabel)
   modules.py        # Router, Expert base/registry, Summarizer, MetaCritic, MRCE_Lite, judge helpers
   orchestrator.py   # OrchestratorState + Orchestrator (printing, trace)
+  programmable_orchestrator.py   # Programmable agent wrapper around the Orchestrator
   cli.py            # Entrypoint, flags, interactive loop, hints persistence
 
 ---------------------------------------------------------------------
@@ -71,8 +72,8 @@ Local (Ollama):
 What it prints (per round)
 ---------------------------------------------------------------------
 - Round header: mode, goal, vibe
-- Expert candidates (ordered by mode/vibe)
-- Judge rationale (and optional judge payload dict if --print_judge_payload)
+- Expert candidates with judge-assigned ranks
+- Judge overall ranking and rationale (optional judge payload string if --print_judge_payload)
 - Meta-critic scores: route/quality/alignment + hints per agent
 - Running summary
 
@@ -83,7 +84,7 @@ Flags
 --mode [explore|verify|attack|plan]
 --max_rounds N
 --quiet                     # suppress per-round prints
---print_judge_payload       # show dict sent to MultiChainComparison
+--print_judge_payload       # show text sent to the Judge
 --hints_cache path.json     # persist router/expert hints across runs
 --top_k N                   # number of experts selected per round
 --gate_min_conf X           # minimum confidence for gating (0-1)
@@ -113,7 +114,6 @@ True DSPy compilation (optional; not wired by default):
 Troubleshooting
 ---------------------------------------------------------------------
 - 429 / insufficient_quota → Add credits, slow calls, or switch providers (DSPY_LM=..., relevant API_KEY).
-- MultiChainComparison errors (missing 'completions', KeyError: 'answer') → Already handled; we send robust dicts and have a fallback judge.
 - No output / sudden exit on Windows → You likely hit ESC (immediate exit by design).
 - Costs/verbosity → Verbose mode prints (and spends tokens). Use --quiet after debugging.
 
@@ -147,6 +147,6 @@ Interactive (multi-question, stateful, hints persisted):
 ---------------------------------------------------------------------
 Design notes
 ---------------------------------------------------------------------
-- Judge resilience: DSPy has changed MultiChainComparison inputs/outputs across versions. We supply redundant keys and a fallback so runs don’t break.
+- Judge resilience: The judge is implemented as a DSPy program, avoiding API drift and allowing further compilation.
 - Personas for 4o-mini: system guidance + structured deliverables → crisp, non-hallucinatory answers; respects mode/goal.
 - Meta-feedback loop: short hints update router/experts each round; with --hints_cache, those hints carry across sessions without formal compilation.

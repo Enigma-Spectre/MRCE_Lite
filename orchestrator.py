@@ -132,12 +132,8 @@ class Orchestrator(dspy.Module):
                 print("-- Judge rationale --")
                 print(pred.rationale)
                 if print_judge_payload and getattr(pred, 'payload', None) is not None:
-                    print("-- Judge payload (completions) --")
-                    try:
-                        import json as _json
-                        print(_json.dumps(pred.payload, indent=2)[:4000])
-                    except Exception:
-                        print(str(pred.payload)[:4000])
+                    print("-- Judge payload --")
+                    print(str(pred.payload)[:4000])
                 print("-- Meta-critic --")
                 print(f"stop_label={meta.stop_label} | route={meta.route_score:.2f} | quality={meta.quality_score:.2f} | align={meta.alignment_score:.2f}")
                 if meta.router_hint: print(f"router_hint: {meta.router_hint}")
