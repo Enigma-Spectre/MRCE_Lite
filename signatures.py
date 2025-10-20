@@ -5,6 +5,38 @@ from typing import Literal
 RoundMode = Literal["explore", "verify", "attack", "plan"]
 VibeLabel = Literal["analytic", "creative", "critical", "plan"]
 
+
+class ShouldRespondSig(dspy.Signature):
+    """SYSTEM:\n{system}\n\nROLE: Expert gate. Decide whether this persona should answer.\nRETURN yes/no, confidence in [0,1], and comma‑separated coverage_tags."""
+    system: str = dspy.InputField()
+    persona: str = dspy.InputField(desc="Expert persona name")
+    persona_text: str = dspy.InputField(desc="Persona description and micro-guidelines")
+    history: dspy.History = dspy.InputField()
+    query: str = dspy.InputField()
+    goal: str = dspy.InputField()
+    mode: RoundMode = dspy.InputField()
+    vibe: VibeLabel = dspy.InputField()
+    hint: str = dspy.InputField(desc="Extra guidance for this expert")
+    notes: str = dspy.InputField(desc="Short persona notes or memory")
+    respond: Literal["yes", "no"] = dspy.OutputField()
+    confidence: float = dspy.OutputField()
+    coverage_tags: str = dspy.OutputField(desc="Comma-separated topical tags")
+
+
+class ExpertOutSig(dspy.Signature):
+    """SYSTEM:\n{system}\n\nROLE: {persona}.\nSTYLE: follow persona_text.\nDELIVERABLE: structured answer with sections CLAIMS, EVIDENCE, ASSUMPTIONS, TESTS, RISKS. Max ~200 tokens."""
+    system: str = dspy.InputField()
+    persona: str = dspy.InputField(desc="Expert persona name")
+    persona_text: str = dspy.InputField(desc="Persona description and micro-guidelines")
+    history: dspy.History = dspy.InputField()
+    query: str = dspy.InputField()
+    goal: str = dspy.InputField()
+    mode: RoundMode = dspy.InputField()
+    vibe: VibeLabel = dspy.InputField()
+    hint: str = dspy.InputField(desc="Extra guidance for this expert")
+    notes: str = dspy.InputField(desc="Short persona notes or memory")
+    answer: str = dspy.OutputField(desc="Structured text with required sections")
+
 class VibeSig(dspy.Signature):
     """SYSTEM:\n{system}\n\nROLE: Router.\nTASK: Assign EXACTLY ONE label from {analytic, creative, critical, plan}.\n
     CRITERIA:\n- analytic: factual/precise answer or synthesis\n- creative: ideas/variants/brainstorm\n

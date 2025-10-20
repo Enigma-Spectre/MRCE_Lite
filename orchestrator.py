@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 
 import dspy
 from signatures import RoundMode
-from modules import MRCE_Lite, Summarizer, MetaCritic
+from modules import MRCE_Lite, Summarizer, MetaCritic, EXPERT_NAMES
 
 DEFAULT_ULTIMATE_GOAL = "Reach irreducible truth or contradiction."
 
@@ -16,13 +16,29 @@ class OrchestratorState:
     goal: str = DEFAULT_ULTIMATE_GOAL
     mode: RoundMode = "verify"
     router_guidance: str = ""
-    expert_hints: Dict[str, str] = field(default_factory=lambda: {"analyst": "", "synth": "", "critic": ""})
+    expert_hints: Dict[str, str] = field(default_factory=lambda: {name: "" for name in EXPERT_NAMES})
     round_idx: int = 0
 
+def _coerce_list(value):
+    if value is None:
+        return []
+    if callable(value):
+        try:
+            value = value()
+        except TypeError:
+            return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+
 class Orchestrator(dspy.Module):
-    def __init__(self, max_rounds: int = 4):
+    def __init__(self, max_rounds: int = 4, top_k: Optional[int] = None,
+                 gate_min_conf: Optional[float] = None, gate_lambda: Optional[float] = None):
         super().__init__()
-        self.pipeline = MRCE_Lite()
+        self.pipeline = MRCE_Lite(top_k=top_k, gate_min_conf=gate_min_conf, gate_lambda=gate_lambda)
         self.summarizer = Summarizer()
         self.critic = MetaCritic()
         self.max_rounds = max_rounds
@@ -74,14 +90,21 @@ class Orchestrator(dspy.Module):
             state.history.messages.append({"role": "user", "content": query})
             state.history.messages.append({"role": "assistant", "content": pred.answer})
 
+            candidates = _coerce_list(getattr(pred, "candidates", []))
+            labels = _coerce_list(getattr(pred, "candidate_labels", getattr(pred, "labels", [])))
+
             round_info = {
                 "round": state.round_idx,
                 "mode": state.mode,
                 "goal": state.goal,
                 "vibe": pred.vibe,
-                "candidates": pred.candidates,
-                "labels": getattr(pred, "labels", None),
-                "judge_ranking": getattr(pred, "ranking", None),
+                "candidates": [
+                    {
+                        "label": labels[i] if i < len(labels) else f"Candidate {i+1}",
+                        "text": candidates[i],
+                    }
+                    for i in range(len(candidates))
+                ],
                 "judge_rationale": pred.rationale,
                 "judge_payload": getattr(pred, "payload", None),
                 "meta": {
@@ -102,17 +125,10 @@ class Orchestrator(dspy.Module):
                 print(f"\n=== Round {state.round_idx} ===")
                 print(f"Mode: {state.mode} | Goal: {state.goal}")
                 print(f"Vibe: {pred.vibe}")
-                print("\n-- Expert candidates --")
-                for label, text in zip(getattr(pred, "labels", []), pred.candidates):
-                    rank = (
-                        pred.ranking.index(label) + 1
-                        if getattr(pred, "ranking", None) and label in pred.ranking
-                        else "?"
-                    )
-                    print(f"[{rank}] {label}: {text}\n")
-                if getattr(pred, "ranking", None):
-                    print("-- Judge overall ranking --")
-                    print(" > ".join(pred.ranking))
+                print("\n-- Expert candidates (ordered) --")
+                for i, c in enumerate(candidates, 1):
+                    label = labels[i - 1] if i - 1 < len(labels) else f"Candidate {i}"
+                    print(f"[{i}] {label}\n{c}\n")
                 print("-- Judge rationale --")
                 print(pred.rationale)
                 if print_judge_payload and getattr(pred, 'payload', None) is not None:

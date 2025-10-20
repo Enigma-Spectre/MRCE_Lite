@@ -1,8 +1,9 @@
 MRCE-lite (DSPy) — Modular, Robust, Verbose
 ====================================================
 
-Ensemble reasoning with a Router + Experts (Analyst/Synth/Critic) + Judge + Orchestrator.
-Judge is now a fully DSPy-programmable module that ranks expert outputs. Verbose per-round logs. Personas tuned for openai/gpt-4o-mini.
+Ensemble reasoning with a Router + gated Expert pool + Judge + Orchestrator.
+Experts include Analyst, Synthesizer, Critic, and additional personas (Theorist, Empiricist, Statistician, SystemsEngineer, CounterexampleHunter).
+Hardened against DSPy MultiChainComparison API drift. Verbose per-round logs. Personas tuned for openai/gpt-4o-mini.
 
 ---------------------------------------------------------------------
 File layout
@@ -10,7 +11,7 @@ File layout
 dspy_mrce_pkg/
   config.py         # LM config (provider-agnostic) + global SYSTEM_PERSONA
   signatures.py     # DSPy signatures + type aliases (RoundMode, VibeLabel)
-  modules.py        # Router, Experts, Judge, Summarizer, MetaCritic, MRCE_Lite
+  modules.py        # Router, Expert base/registry, Summarizer, MetaCritic, MRCE_Lite, judge helpers
   orchestrator.py   # OrchestratorState + Orchestrator (printing, trace)
   programmable_orchestrator.py   # Programmable agent wrapper around the Orchestrator
   cli.py            # Entrypoint, flags, interactive loop, hints persistence
@@ -85,18 +86,16 @@ Flags
 --quiet                     # suppress per-round prints
 --print_judge_payload       # show text sent to the Judge
 --hints_cache path.json     # persist router/expert hints across runs
+--top_k N                   # number of experts selected per round
+--gate_min_conf X           # minimum confidence for gating (0-1)
+--gate_lambda X             # diversity penalty for expert selection
 
 ---------------------------------------------------------------------
 How it works
 ---------------------------------------------------------------------
 - Router → labels the query with a vibe ∈ {analytic, creative, critical, plan}.
-- Experts
-  * Analyst: precise CLAIMS / EVIDENCE / CAVEATS.
-  * Synthesizer: options and quick tests.
-  * Critic: failure modes, counter-evidence, safer plans.
-  Personas enforced via signature system text + global SYSTEM_PERSONA.
-- Judge → DSPy Chain-of-Thought judge over the three candidates.
-  Candidates are provided as numbered text and the judge returns a ranking + rationale.
+- ExpertScheduler → all personas run a cheap ShouldRespond gate. Top-k diverse experts (Analyst, Synthesizer, Critic, Theorist, Empiricist, Statistician, SystemsEngineer, CounterexampleHunter) produce structured answers.
+- Judge → MultiChainComparison over selected candidates. If a DSPy version changes behavior, a fallback judge still returns an answer.
 - Meta-Critic → scores routing, quality, alignment; returns hints that coach router/experts.
 - Orchestrator → loops rounds until "irreducible truth" / "contradiction" (heuristic) or --max_rounds.
 
@@ -105,7 +104,7 @@ Persistence
 ---------------------------------------------------------------------
 Hints-only persistence (no dataset): pass --hints_cache path.json to store:
   - router_guidance
-  - expert_hints for {analyst, synth, critic}
+  - expert_hints per persona (analyst, synth, critic, ...)
 
 True DSPy compilation (optional; not wired by default):
   - Collect a tiny trainset, run an optimizer like BootstrapFewShot().compile(...),

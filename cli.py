@@ -37,14 +37,20 @@ def main():
     parser.add_argument("--quiet", action="store_true", help="Reduce per-round printing.")
     parser.add_argument("--print_judge_payload", action="store_true", help="Print dict payload sent to judge.")
     parser.add_argument("--hints_cache", type=str, default=None, help="Persist router/expert hints as JSON.")
+    parser.add_argument("--top_k", type=int, default=None, help="Number of experts to run (3-5).")
+    parser.add_argument("--gate_min_conf", type=float, default=None, help="Min confidence for expert gating.")
+    parser.add_argument("--gate_lambda", type=float, default=None, help="Diversity penalty for selection.")
     args = parser.parse_args()
 
     configure_lm()
 
-    agent = ProgrammableOrchestratorAgent(
-        Orchestrator(max_rounds=args.max_rounds)
+    orchestrator = Orchestrator(
+        max_rounds=args.max_rounds,
+        top_k=args.top_k,
+        gate_min_conf=args.gate_min_conf,
+        gate_lambda=args.gate_lambda,
     )
-    state = agent.init_state()
+    state = OrchestratorState()
 
     # Optional: load hints
     if args.hints_cache and os.path.exists(args.hints_cache):
