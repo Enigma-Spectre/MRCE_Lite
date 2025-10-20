@@ -259,6 +259,7 @@ class MRCE_Lite(dspy.Module):
             ans, rat, payload = jo.answer, jo.rationale, None
 
         pred = dspy.Prediction(vibe=vibe, candidates=answers, rationale=rat, answer=ans)
+        pred.candidate_labels = labels
         if want_payload:
             pred.payload = payload
         return pred
