@@ -21,6 +21,17 @@ def _normalize_hint_key(key: str) -> str:
     return _HINT_KEY_ALIASES.get(lowered, lowered)
 from programmable_orchestrator import ProgrammableOrchestratorAgent
 
+_HINT_KEY_ALIASES = {
+    "synth": "synthesizer",
+}
+
+
+def _normalize_hint_key(key: str) -> str:
+    if not isinstance(key, str):
+        return key
+    lowered = key.lower()
+    return _HINT_KEY_ALIASES.get(lowered, lowered)
+
 def start_windows_esc_listener():
     if os.name != "nt":
         return None
@@ -62,7 +73,8 @@ def main():
         gate_min_conf=args.gate_min_conf,
         gate_lambda=args.gate_lambda,
     )
-    state = OrchestratorState()
+    agent = ProgrammableOrchestratorAgent(orchestrator=orchestrator)
+    state = agent.init_state()
 
     # Optional: load hints
     if args.hints_cache and os.path.exists(args.hints_cache):
