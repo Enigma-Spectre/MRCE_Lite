@@ -82,7 +82,9 @@ class Orchestrator(dspy.Module):
             if meta.analyst_hint:
                 state.expert_hints["analyst"] = (state.expert_hints["analyst"] + "\n" + meta.analyst_hint).strip()
             if meta.synth_hint:
-                state.expert_hints["synth"] = (state.expert_hints["synth"] + "\n" + meta.synth_hint).strip()
+                state.expert_hints["synthesizer"] = (
+                    state.expert_hints["synthesizer"] + "\n" + meta.synth_hint
+                ).strip()
             if meta.critic_hint:
                 state.expert_hints["critic"] = (state.expert_hints["critic"] + "\n" + meta.critic_hint).strip()
 

@@ -9,6 +9,17 @@ from config import configure_lm
 from orchestrator import Orchestrator, DEFAULT_ULTIMATE_GOAL
 from programmable_orchestrator import ProgrammableOrchestratorAgent
 
+_HINT_KEY_ALIASES = {
+    "synth": "synthesizer",
+}
+
+
+def _normalize_hint_key(key: str) -> str:
+    if not isinstance(key, str):
+        return key
+    lowered = key.lower()
+    return _HINT_KEY_ALIASES.get(lowered, lowered)
+
 def start_windows_esc_listener():
     if os.name != "nt":
         return None
@@ -50,7 +61,8 @@ def main():
         gate_min_conf=args.gate_min_conf,
         gate_lambda=args.gate_lambda,
     )
-    state = OrchestratorState()
+    agent = ProgrammableOrchestratorAgent(orchestrator=orchestrator)
+    state = agent.init_state()
 
     # Optional: load hints
     if args.hints_cache and os.path.exists(args.hints_cache):
@@ -58,7 +70,9 @@ def main():
             _h = json.load(open(args.hints_cache, "r"))
             state.router_guidance = _h.get("router_guidance", "")
             if isinstance(_h.get("expert_hints"), dict):
-                state.expert_hints.update(_h["expert_hints"])
+                for hint_key, hint_text in _h["expert_hints"].items():
+                    norm_key = _normalize_hint_key(hint_key)
+                    state.expert_hints[norm_key] = hint_text
             print(f"[loaded hints] {args.hints_cache}")
         except Exception as e:
             print(f"[warn] couldn't load hints: {e}")
