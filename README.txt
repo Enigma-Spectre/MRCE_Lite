@@ -2,7 +2,7 @@ MRCE-lite (DSPy) — Modular, Robust, Verbose
 ====================================================
 
 Ensemble reasoning with a Router + Experts (Analyst/Synth/Critic) + Judge + Orchestrator.
-Hardened against DSPy MultiChainComparison API drift. Verbose per-round logs. Personas tuned for openai/gpt-4o-mini.
+Judge is now a fully DSPy-programmable module that ranks expert outputs. Verbose per-round logs. Personas tuned for openai/gpt-4o-mini.
 
 ---------------------------------------------------------------------
 File layout
@@ -10,7 +10,7 @@ File layout
 dspy_mrce_pkg/
   config.py         # LM config (provider-agnostic) + global SYSTEM_PERSONA
   signatures.py     # DSPy signatures + type aliases (RoundMode, VibeLabel)
-  modules.py        # Router, Experts, Summarizer, MetaCritic, MRCE_Lite, judge helpers
+  modules.py        # Router, Experts, Judge, Summarizer, MetaCritic, MRCE_Lite
   orchestrator.py   # OrchestratorState + Orchestrator (printing, trace)
   cli.py            # Entrypoint, flags, interactive loop, hints persistence
 
@@ -70,8 +70,8 @@ Local (Ollama):
 What it prints (per round)
 ---------------------------------------------------------------------
 - Round header: mode, goal, vibe
-- Expert candidates (ordered by mode/vibe)
-- Judge rationale (and optional judge payload dict if --print_judge_payload)
+- Expert candidates with judge-assigned ranks
+- Judge overall ranking and rationale (optional judge payload string if --print_judge_payload)
 - Meta-critic scores: route/quality/alignment + hints per agent
 - Running summary
 
@@ -82,7 +82,7 @@ Flags
 --mode [explore|verify|attack|plan]
 --max_rounds N
 --quiet                     # suppress per-round prints
---print_judge_payload       # show dict sent to MultiChainComparison
+--print_judge_payload       # show text sent to the Judge
 --hints_cache path.json     # persist router/expert hints across runs
 
 ---------------------------------------------------------------------
@@ -94,9 +94,8 @@ How it works
   * Synthesizer: options and quick tests.
   * Critic: failure modes, counter-evidence, safer plans.
   Personas enforced via signature system text + global SYSTEM_PERSONA.
-- Judge → MultiChainComparison over the three candidates.
-  We pass dict completions with answer/completion/output/response + rationale/reasoning.
-  If a DSPy version changes behavior, a fallback judge still returns an answer.
+- Judge → DSPy Chain-of-Thought judge over the three candidates.
+  Candidates are provided as numbered text and the judge returns a ranking + rationale.
 - Meta-Critic → scores routing, quality, alignment; returns hints that coach router/experts.
 - Orchestrator → loops rounds until "irreducible truth" / "contradiction" (heuristic) or --max_rounds.
 
@@ -115,7 +114,6 @@ True DSPy compilation (optional; not wired by default):
 Troubleshooting
 ---------------------------------------------------------------------
 - 429 / insufficient_quota → Add credits, slow calls, or switch providers (DSPY_LM=..., relevant API_KEY).
-- MultiChainComparison errors (missing 'completions', KeyError: 'answer') → Already handled; we send robust dicts and have a fallback judge.
 - No output / sudden exit on Windows → You likely hit ESC (immediate exit by design).
 - Costs/verbosity → Verbose mode prints (and spends tokens). Use --quiet after debugging.
 
@@ -149,6 +147,6 @@ Interactive (multi-question, stateful, hints persisted):
 ---------------------------------------------------------------------
 Design notes
 ---------------------------------------------------------------------
-- Judge resilience: DSPy has changed MultiChainComparison inputs/outputs across versions. We supply redundant keys and a fallback so runs don’t break.
+- Judge resilience: The judge is implemented as a DSPy program, avoiding API drift and allowing further compilation.
 - Personas for 4o-mini: system guidance + structured deliverables → crisp, non-hallucinatory answers; respects mode/goal.
 - Meta-feedback loop: short hints update router/experts each round; with --hints_cache, those hints carry across sessions without formal compilation.

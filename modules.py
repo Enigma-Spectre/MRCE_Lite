@@ -1,63 +1,19 @@
 # modules.py
-import json
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 import dspy
 
-from signatures import VibeSig, AnalystSig, SynthSig, CriticSig, SummarizeSig, MetaCriticSig, RoundMode, VibeLabel
+from signatures import (
+    VibeSig,
+    AnalystSig,
+    SynthSig,
+    CriticSig,
+    SummarizeSig,
+    MetaCriticSig,
+    RoundMode,
+    VibeLabel,
+    JudgeSig,
+)
 from config import SYSTEM_PERSONA
-
-# ---- Judge helpers (version-safe) ----
-
-def _as_completion_dicts(candidates: List[str], labels: Optional[List[str]] = None) -> List[dict]:
-    out: List[dict] = []
-    for i, text in enumerate(candidates, 1):
-        text = (text or "").strip()
-        name = labels[i-1] if labels and i-1 < len(labels) else f"Candidate {i}"
-        gist = text.split("\n", 1)[0][:200]
-        item = {
-            "answer": text,
-            "completion": text,
-            "output": text,
-            "response": text,
-            "rationale": f"Source: {name}. One-line gist: {gist}",
-            "reasoning": f"From {name}.",
-        }
-        out.append(item)
-    return out
-
-def _call_judge(judge, question: str, candidates: List[str], labels: Optional[List[str]] = None):
-    try:
-        payload = _as_completion_dicts(candidates, labels=labels)
-        return judge(question=question, completions=payload), payload
-    except TypeError:
-        kwargs = {"question": question}
-        for i, c in enumerate(candidates, 1):
-            kwargs[f"reasoning_attempt_{i}"] = c
-        return judge(**kwargs), None
-
-def _unpack_judge(judge_out: Any):
-    def get(obj, key, default=""):
-        if isinstance(obj, dict):
-            return obj.get(key, default)
-        return getattr(obj, key, default)
-
-    for key in ("answer", "best", "completion", "output", "response"):
-        ans = get(judge_out, key, None)
-        if ans:
-            break
-    else:
-        ans = ""
-
-    for key in ("rationale", "why", "critique", "explanation", "reason"):
-        rat = get(judge_out, key, None)
-        if rat:
-            break
-    else:
-        rat = ""
-
-    ans = str(ans) if ans is not None else ""
-    rat = str(rat) if rat is not None else ""
-    return ans, rat
 
 # ---- Modules ----
 
@@ -89,6 +45,38 @@ class Critic(dspy.Module):
     def forward(self, query: str, history: dspy.History, goal: str, mode: RoundMode, guidance: str):
         return self.step(system=SYSTEM_PERSONA, query=query, history=history, goal=goal, mode=mode, guidance=guidance)
 
+class Judge(dspy.Module):
+    def __init__(self, temperature: float = 0.3):
+        super().__init__()
+        self.step = dspy.ChainOfThought(JudgeSig, temperature=temperature)
+
+    def forward(
+        self,
+        question: str,
+        candidates: List[str],
+        labels: Optional[List[str]] = None,
+        want_payload: bool = False,
+    ):
+        blocks = []
+        for i, text in enumerate(candidates, 1):
+            label = labels[i - 1] if labels and i - 1 < len(labels) else f"Candidate {i}"
+            blocks.append(f"[{label}]\n{text}")
+        joined = "\n\n".join(blocks)
+        out = self.step(system=SYSTEM_PERSONA, question=question, candidates=joined)
+        ranking_line = str(getattr(out, "rankings", "")).strip()
+        ranking = [lab.strip() for lab in ranking_line.split(">") if lab.strip()]
+        best_label = str(getattr(out, "best", "")).strip()
+        if not best_label and ranking:
+            best_label = ranking[0]
+        pred = dspy.Prediction(
+            best_label=best_label,
+            rankings=ranking,
+            rationale=str(getattr(out, "rationale", "")),
+        )
+        if want_payload:
+            pred.payload = joined
+        return pred
+
 class Summarizer(dspy.Module):
     def __init__(self):
         super().__init__()
@@ -112,7 +100,7 @@ class MRCE_Lite(dspy.Module):
         self.analyst = Analyst()
         self.synth = Synthesizer()
         self.critic = Critic()
-        self.judge = dspy.MultiChainComparison("question -> answer", M=M, temperature=judge_temperature)
+        self.judge = Judge(temperature=judge_temperature)
 
     def forward(self, query: str, history: dspy.History, goal: str, mode: RoundMode,
                 router_guidance: str, expert_hints: Dict[str, str], want_payload=False):
@@ -142,19 +130,20 @@ class MRCE_Lite(dspy.Module):
             ]
             labels = ["Synth", "Analyst", "Critic"]
 
-        try:
-            judge_out, payload = _call_judge(self.judge, question=query, candidates=ordered, labels=labels)
-            ans, rat = _unpack_judge(judge_out)
-        except Exception:
-            # Absolute fallback: pick best via a simple Predict judge
-            judge_sig = dspy.Signature.from_string("""
-                question, a1, a2, a3 -> answer, rationale
-            """)
-            simple = dspy.Predict(judge_sig, temperature=0.0)
-            jo = simple(question=query, a1=ordered[0], a2=ordered[1], a3=ordered[2])
-            ans, rat, payload = jo.answer, jo.rationale, None
-
-        pred = dspy.Prediction(vibe=vibe, candidates=ordered, rationale=rat, answer=ans)
-        if want_payload:
-            pred.payload = payload
+        judge_pred = self.judge(
+            question=query, candidates=ordered, labels=labels, want_payload=want_payload
+        )
+        ranking = judge_pred.rankings
+        chosen_label = judge_pred.best_label or (ranking[0] if ranking else labels[0])
+        chosen_idx = labels.index(chosen_label) if chosen_label in labels else 0
+        pred = dspy.Prediction(
+            vibe=vibe,
+            candidates=ordered,
+            labels=labels,
+            ranking=ranking,
+            rationale=judge_pred.rationale,
+            answer=ordered[chosen_idx],
+        )
+        if want_payload and getattr(judge_pred, "payload", None) is not None:
+            pred.payload = judge_pred.payload
         return pred

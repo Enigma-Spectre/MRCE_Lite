@@ -80,6 +80,8 @@ class Orchestrator(dspy.Module):
                 "goal": state.goal,
                 "vibe": pred.vibe,
                 "candidates": pred.candidates,
+                "labels": getattr(pred, "labels", None),
+                "judge_ranking": getattr(pred, "ranking", None),
                 "judge_rationale": pred.rationale,
                 "judge_payload": getattr(pred, "payload", None),
                 "meta": {
@@ -100,18 +102,22 @@ class Orchestrator(dspy.Module):
                 print(f"\n=== Round {state.round_idx} ===")
                 print(f"Mode: {state.mode} | Goal: {state.goal}")
                 print(f"Vibe: {pred.vibe}")
-                print("\n-- Expert candidates (ordered) --")
-                for i, c in enumerate(pred.candidates, 1):
-                    print(f"[{i}] {c}\n")
+                print("\n-- Expert candidates --")
+                for label, text in zip(getattr(pred, "labels", []), pred.candidates):
+                    rank = (
+                        pred.ranking.index(label) + 1
+                        if getattr(pred, "ranking", None) and label in pred.ranking
+                        else "?"
+                    )
+                    print(f"[{rank}] {label}: {text}\n")
+                if getattr(pred, "ranking", None):
+                    print("-- Judge overall ranking --")
+                    print(" > ".join(pred.ranking))
                 print("-- Judge rationale --")
                 print(pred.rationale)
                 if print_judge_payload and getattr(pred, 'payload', None) is not None:
-                    print("-- Judge payload (completions) --")
-                    try:
-                        import json as _json
-                        print(_json.dumps(pred.payload, indent=2)[:4000])
-                    except Exception:
-                        print(str(pred.payload)[:4000])
+                    print("-- Judge payload --")
+                    print(str(pred.payload)[:4000])
                 print("-- Meta-critic --")
                 print(f"stop_label={meta.stop_label} | route={meta.route_score:.2f} | quality={meta.quality_score:.2f} | align={meta.alignment_score:.2f}")
                 if meta.router_hint: print(f"router_hint: {meta.router_hint}")

@@ -51,6 +51,15 @@ class CriticSig(dspy.Signature):
     guidance: str = dspy.InputField(desc="Hints to improve expert output")
     answer: str = dspy.OutputField()
 
+class JudgeSig(dspy.Signature):
+    """SYSTEM:\n{system}\n\nROLE: Judge. Compare candidates and rank them from best to worst.\nFORMAT:\n- BEST: top candidate label\n- RANKINGS: label1 > label2 > ...\n- RATIONALE: brief justification\n"""
+    system: str = dspy.InputField()
+    question: str = dspy.InputField()
+    candidates: str = dspy.InputField(desc="Numbered candidate answers")
+    best: str = dspy.OutputField(desc="Label of the top candidate")
+    rankings: str = dspy.OutputField(desc="Candidate labels best-to-worst, separated by '>'")
+    rationale: str = dspy.OutputField(desc="Why this ranking was chosen")
+
 class SummarizeSig(dspy.Signature):
     """SYSTEM:\n{system}\n\nSummarize the dialogue so far + latest answer in <=120 words.\nKeep key facts, decisions, contradictions, open questions."""
     system: str = dspy.InputField()
