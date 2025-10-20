@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 
 import dspy
 from signatures import RoundMode
-from modules import MRCE_Lite, Summarizer, MetaCritic
+from modules import MRCE_Lite, Summarizer, MetaCritic, EXPERT_NAMES
 
 DEFAULT_ULTIMATE_GOAL = "Reach irreducible truth or contradiction."
 
@@ -16,13 +16,14 @@ class OrchestratorState:
     goal: str = DEFAULT_ULTIMATE_GOAL
     mode: RoundMode = "verify"
     router_guidance: str = ""
-    expert_hints: Dict[str, str] = field(default_factory=lambda: {"analyst": "", "synth": "", "critic": ""})
+    expert_hints: Dict[str, str] = field(default_factory=lambda: {name: "" for name in EXPERT_NAMES})
     round_idx: int = 0
 
 class Orchestrator(dspy.Module):
-    def __init__(self, max_rounds: int = 4):
+    def __init__(self, max_rounds: int = 4, top_k: Optional[int] = None,
+                 gate_min_conf: Optional[float] = None, gate_lambda: Optional[float] = None):
         super().__init__()
-        self.pipeline = MRCE_Lite()
+        self.pipeline = MRCE_Lite(top_k=top_k, gate_min_conf=gate_min_conf, gate_lambda=gate_lambda)
         self.summarizer = Summarizer()
         self.critic = MetaCritic()
         self.max_rounds = max_rounds
