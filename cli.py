@@ -6,7 +6,8 @@ import argparse
 import threading
 
 from config import configure_lm
-from orchestrator import Orchestrator, OrchestratorState, DEFAULT_ULTIMATE_GOAL
+from orchestrator import Orchestrator, DEFAULT_ULTIMATE_GOAL
+from programmable_orchestrator import ProgrammableOrchestratorAgent
 
 def start_windows_esc_listener():
     if os.name != "nt":
@@ -40,8 +41,10 @@ def main():
 
     configure_lm()
 
-    orchestrator = Orchestrator(max_rounds=args.max_rounds)
-    state = OrchestratorState()
+    agent = ProgrammableOrchestratorAgent(
+        Orchestrator(max_rounds=args.max_rounds)
+    )
+    state = agent.init_state()
 
     # Optional: load hints
     if args.hints_cache and os.path.exists(args.hints_cache):
@@ -57,7 +60,7 @@ def main():
     if args.question:
         q = " ".join(args.question).strip()
         try:
-            pred = orchestrator(
+            pred = agent(
                 query=q, state=state, goal=args.goal or DEFAULT_ULTIMATE_GOAL,
                 mode=(args.mode or "verify"), max_rounds=args.max_rounds,
                 verbose=not args.quiet, print_judge_payload=args.print_judge_payload
@@ -108,7 +111,7 @@ def main():
             break
 
         try:
-            pred = orchestrator(
+            pred = agent(
                 query=q, state=state, goal=state.goal, mode=state.mode,
                 verbose=not args.quiet, print_judge_payload=args.print_judge_payload
             )

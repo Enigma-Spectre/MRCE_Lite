@@ -12,6 +12,7 @@ dspy_mrce_pkg/
   signatures.py     # DSPy signatures + type aliases (RoundMode, VibeLabel)
   modules.py        # Router, Experts, Summarizer, MetaCritic, MRCE_Lite, judge helpers
   orchestrator.py   # OrchestratorState + Orchestrator (printing, trace)
+  programmable_orchestrator.py   # Programmable agent wrapper around the Orchestrator
   cli.py            # Entrypoint, flags, interactive loop, hints persistence
 
 ---------------------------------------------------------------------
